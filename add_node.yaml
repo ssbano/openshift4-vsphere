@@ -1,0 +1,46 @@
+- hosts: localhost
+  vars_prompt:
+    - name: cluster_name
+      prompt: "Cluster name"
+      private: no
+
+    - name: vcenter_username
+      prompt: "VCenter Username"
+      private: no
+
+    - name: vcenter_password
+      prompt: "VCenter Password"
+      private: yes
+ 
+    - name: node_number
+      prompt: "Provide node number (2 to 9)"
+      private: no
+
+    - name: pull_secret
+      prompt: "Openshift Pull Secret"
+      private: yes
+
+  vars:
+    vcenter_hostname: 192.168.10.253
+    template_rhcos: "RHCOS"
+    vcenter_datacenter: "Datacenter"
+    vcenter_network: "VM Network"
+    vcenter_datastore: "datastore4t"
+    base_domain: "bsb.openshiftdemo.com.br"
+    dns_server_address: 192.168.10.1
+  tasks:
+  ########### Bastion Tasks #############
+
+  - name: Get key content
+    set_fact: 
+     key_content: "{{ lookup('file','chave.pub') }}"
+
+  - name: Create Worker VMs
+    include_role:
+     name: vmware
+    vars:
+      vm_name: "compute-{{ node_number }}"
+      vm_memory: 8192
+      vm_cpu: 2
+      vm_mac: "00:50:56:a7:95:b{{ node_number }}"
+      ignition_config_data: "{{lookup('file', '{{ playbook_dir }}/{{ cluster_name }}/worker.64') }}"

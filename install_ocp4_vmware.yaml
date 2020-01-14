@@ -1,0 +1,249 @@
+- hosts: localhost
+  vars_prompt:
+    - name: cluster_name
+      prompt: "Cluster name"
+      private: no
+
+    - name: vcenter_username
+      prompt: "VCenter Username"
+      private: no
+
+    - name: vcenter_password
+      prompt: "VCenter Password"
+      private: yes
+
+    - name: pull_secret
+      prompt: "Openshift Pull Secret"
+      private: yes
+
+  vars:
+    vcenter_hostname: 192.168.10.253
+    template_rhcos: "RHCOS"
+    vcenter_datacenter: "Datacenter"
+    vcenter_network: "VM Network"
+    vcenter_datastore: "datastore4t"
+    base_domain: "bsb.openshiftdemo.com.br"
+    dns_server_address: 192.168.10.1
+  tasks:
+  ########### Bastion Tasks #############
+
+  - name: Get IP Address
+    set_fact:
+     web_server_address: "{{ ansible_default_ipv4.address }}"
+
+  - debug: var=web_server_address
+
+  - name: Install httpd and other bin utils
+    yum: 
+     name: "{{ item }}"
+     state: latest
+    with_items:
+     - httpd
+     - wget
+
+  - name: Start httpd
+    service:
+     name: httpd
+     state: started
+     enabled: yes
+
+  - name: Download pip
+    get_url:
+     url: https://bootstrap.pypa.io/get-pip.py
+     dest: /tmp/get-pip.py
+     mode: '0755'
+
+  # - name: Download pip
+  #   shell: curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+
+  - name: Get pip
+    shell: cd /tmp && python get-pip.py
+
+  - name: Install pip
+    shell: pip install --upgrade pip
+
+  - name: Install pyvmomi
+    shell: pip install pyvmomi
+
+  - name: Flush iptables rules
+    shell: iptables -F
+
+  - name: Disable SELinux
+    shell: setenforce 0
+
+  # - name: Get jq and install
+  #   shell: "cd /tmp && wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 && mv /tmp/jq-linux64 /usr/local/bin/jq && chmod 755 /usr/local/bin/jq"
+
+  - name: Get jq and install
+    get_url:
+     url: https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+     dest: /usr/local/bin/jq
+     mode: '0755'
+
+  - name: Create ssh key
+    shell: "echo -e 'y\n' | ssh-keygen -q -t rsa -b 4096 -N '' -f {{ playbook_dir }}/chave"
+
+  - name: Add key to ssh agent
+    shell: eval "$(ssh-agent -s)" && ssh-add "{{ playbook_dir }}/chave"
+
+  - name: Get key content
+    set_fact: 
+     key_content: "{{ lookup('file','chave.pub') }}"
+
+  - name: Set Bastion DNS
+    lineinfile:
+     path: /etc/resolv.conf
+     regexp: "^nameserver"
+     line: "nameserver {{ dns_server_address }}"
+
+  - name: Download oc
+    get_url: 
+     url: https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux-4.2.13.tar.gz
+     dest: /tmp/openshift-client-linux-4.2.13.tar.gz
+     mode: 755
+
+  - name: Extract oc to PATH
+    shell: "tar -zxvf /tmp/openshift-client-linux-4.2.13.tar.gz -C /usr/local/bin/"
+
+  - name: Download openshift-install
+    get_url: 
+     url: https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-install-linux-4.2.13.tar.gz
+     dest: /tmp/openshift-install-linux-4.2.13.tar.gz
+     mode: 755
+
+  - name: Extract openshift-install to PATH
+    shell: "tar -zxvf /tmp/openshift-install-linux-4.2.13.tar.gz -C /usr/local/bin/"
+
+  - name: Create workdir
+    file:
+     name: "{{ cluster_name }}"
+     state: directory
+
+  - name: Check for openshfit-install binary in PATH
+    shell: "which openshift-install"
+    register: ocpbin
+
+  - fail:
+     msg: "Is openshift-install binary in your PATH?"
+    when: ocpbin.rc != 0
+
+  - name: Create install-config based on template
+    template:
+     src: "{{ playbook_dir }}/templates/install-config.yaml.j2"
+     dest: "{{ playbook_dir}}/{{ cluster_name }}/install-config.yaml"
+
+  - name: Create manifests files
+    shell: "openshift-install create manifests --dir={{ playbook_dir}}/{{ cluster_name }}"
+
+  - name: Change Masters manifests
+    lineinfile:
+     path: "{{ playbook_dir }}/{{ cluster_name }}/manifests/cluster-scheduler-02-config.yml"
+     regexp: "  mastersSchedulable: true"
+     line: "  mastersSchedulable: False"
+
+  - name: Create ignition files
+    shell: "openshift-install create ignition-configs --dir={{playbook_dir}}/{{ cluster_name }}"
+
+  - name: Create bookstrap network config file
+    template:
+     src: "{{ playbook_dir }}/templates/netconfig.j2"
+     dest: "{{ playbook_dir }}/{{ cluster_name }}/bootstrap.net"
+    vars:
+     net_ip_address: 192.168.10.9
+     net_mask_prefix: 24
+     net_gateway: 192.168.10.1
+     net_dns: "192.168.10.1"
+
+  - name: Create base64 network config file
+    shell: "base64 -w0 {{ playbook_dir}}/{{ cluster_name }}/bootstrap.net > {{ cluster_name}}/bootstrap.net.64"
+
+#  - name: Generate json to insert on ignition file with static IP
+#    template:
+#     src: "{{ playbook_dir }}/templates/netconfig_json.j2"
+#     dest: "{{ playbook_dir }}/{{ cluster_name }}/bootstrap.net.json"  
+#    vars:
+#     netconfig_b64: "{{lookup('file', '{{ playbook_dir }}/{{ cluster_name }}/bootstrap.net.64') }}" 
+
+#  - name: Create temporary bootstrap.ign file copy
+#    copy:
+#     src: "{{ playbook_dir }}/{{ cluster_name }}/bootstrap.ign"
+#     dest: "{{ playbook_dir }}/{{ cluster_name }}/bootstrap-copy.ign"
+
+
+#  - name: Create temporary append-bootstrap.ign file copy
+#    copy:
+#     src: "{{ playbook_dir }}/{{ cluster_name }}/append-bootstrap.ign"
+#     dest: "{{ playbook_dir }}/{{ cluster_name }}/append-bootstrap-copy.ign"
+
+#  - name: Create final bootstrap.ign file
+#    shell: "jq '.storage.files += [input]' {{ playbook_dir }}/{{ cluster_name }}/bootstrap-copy.ign {{ playbook_dir }}/{{ cluster_name }}/bootstrap.net.json > {{ playbook_dir }}/{{ cluster_name }}/bootstrap.ign" 
+
+#  - name: Create final bootstrap.ign file
+#    shell: "jq '.storage.files += [input]' {{ playbook_dir }}/{{ cluster_name }}/append-bootstrap-copy.ign {{ playbook_dir }}/{{ cluster_name }}/bootstrap.net.json > {{ playbook_dir }}/{{ cluster_name }}/append-bootstrap.ign" 
+
+  - name: Copy bootstrap.ign to docroot of local webserver
+    copy:
+     src: "{{ cluster_name }}/bootstrap.ign"
+     dest: "/var/www/html/bootstrap.ign"
+     mode: 0755
+
+  - name: Check if bootstrap.ign is available on web server
+    uri:
+      url: "http://{{ web_server_address }}/bootstrap.ign"
+
+  - name: Create append-bootstrap.ign file based on template
+    template:
+     src: "{{ playbook_dir }}/templates/append-bootstrap.ign.j2"
+     dest: "{{ playbook_dir }}/{{ cluster_name }}/append-bootstrap.ign"
+
+  - name: Create Base64 for masters
+    shell: "base64 -w0 {{ cluster_name }}/master.ign > {{ cluster_name}}/master.64"
+
+  - name: Create Base64 for workers
+    shell: "base64 -w0 {{ cluster_name }}/worker.ign > {{ cluster_name}}/worker.64"
+
+  - name: Create Base64 for append-bootstrap
+    shell: "base64 -w0 {{ cluster_name }}/append-bootstrap.ign > {{ cluster_name}}/append-bootstrap.64"
+
+  - name: Creates Vcenter Folder
+    vcenter_folder:
+     hostname: '{{ vcenter_hostname }}'
+     username: '{{ vcenter_username }}'
+     password: '{{ vcenter_password }}'
+     datacenter_name: '{{ vcenter_datacenter }}'
+     folder_name: "{{ cluster_name }}"
+     folder_type: vm
+     validate_certs: no
+     state: present
+
+  - name: Create bootstrap VM
+    import_role:
+     name: vmware
+    vars:
+      vm_name: bootstrap
+      vm_memory: 16384
+      vm_cpu: 4
+      vm_mac: "00:50:56:a7:95:a9"
+      ignition_config_data: "{{lookup('file', '{{ playbook_dir }}/{{ cluster_name }}/append-bootstrap.64') }}"
+
+  - name: Create Control Plane VMs
+    include_role:
+     name: vmware
+    vars:
+      vm_name: "control-plane-{{ item }}"
+      vm_memory: 16384
+      vm_cpu: 4
+      vm_mac: "00:50:56:a7:95:a{{ item }}"
+      ignition_config_data: "{{lookup('file', '{{ playbook_dir }}/{{ cluster_name }}/master.64') }}"
+    with_sequence: start=0 end=2 stride=1
+
+  - name: Create Worker VMs
+    include_role:
+     name: vmware
+    vars:
+      vm_name: "compute-{{ item }}"
+      vm_memory: 8192
+      vm_cpu: 2
+      vm_mac: "00:50:56:a7:95:b{{ item }}"
+      ignition_config_data: "{{lookup('file', '{{ playbook_dir }}/{{ cluster_name }}/worker.64') }}"
+    with_sequence: start=0 end=1
