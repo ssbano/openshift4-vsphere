@@ -1,0 +1,62 @@
+- hosts: localhost
+  vars_prompt:
+    - name: cluster_name
+      prompt: "Cluster name"
+      private: no
+
+    - name: vcenter_username
+      prompt: "VCenter Username"
+      private: no
+
+    - name: vcenter_password
+      prompt: "VCenter Password"
+      private: yes
+ 
+    - name: pull_secret
+      prompt: "Openshift Pull Secret"
+      private: yes
+
+  vars:
+    vcenter_hostname: 192.168.10.253
+    template_rhcos: "RHCOS"
+    vcenter_datacenter: "Datacenter"
+    vcenter_network: "VM Network"
+    vcenter_datastore: "datastore4t"
+    base_domain: "bsb.openshiftdemo.com.br"
+    dns_server_address: 192.168.10.1
+  tasks:
+  ########### Bastion Tasks #############
+
+  - name: Get key content
+    set_fact: 
+     key_content: "{{ lookup('file','chave.pub') }}"
+
+  - name: Create OCS1 VMs
+    include_role:
+     name: vmware
+    vars:
+      vm_name: "compute-ocs1"
+      vm_memory: 32768
+      vm_cpu: 16
+      vm_mac: "00:50:56:a7:96:a1"
+      ignition_config_data: "{{lookup('file', '{{ playbook_dir }}/{{ cluster_name }}/worker.64') }}"
+
+  - name: Create OCS1 VMs
+    include_role:
+     name: vmware
+    vars:
+      vm_name: "compute-ocs2"
+      vm_memory: 32768
+      vm_cpu: 16
+      vm_mac: "00:50:56:a7:96:a2"
+      ignition_config_data: "{{lookup('file', '{{ playbook_dir }}/{{ cluster_name }}/worker.64') }}"
+
+  - name: Create OCS1 VMs
+    include_role:
+     name: vmware
+    vars:
+      vm_name: "compute-ocs3"
+      vm_memory: 32768
+      vm_cpu: 16
+      vm_mac: "00:50:56:a7:96:a3"
+      ignition_config_data: "{{lookup('file', '{{ playbook_dir }}/{{ cluster_name }}/worker.64') }}"
