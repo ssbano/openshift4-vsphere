@@ -31,7 +31,7 @@
     set_fact: 
      key_content: "{{ lookup('file','chave.pub') }}"
 
-  - name: Create OCS1 VMs
+  - name: Create OCS1 VM
     include_role:
      name: vmware
     vars:
@@ -41,7 +41,7 @@
       vm_mac: "00:50:56:a7:96:a1"
       ignition_config_data: "{{lookup('file', '{{ playbook_dir }}/{{ cluster_name }}/worker.64') }}"
 
-  - name: Create OCS1 VMs
+  - name: Create OCS2 VM
     include_role:
      name: vmware
     vars:
@@ -51,7 +51,7 @@
       vm_mac: "00:50:56:a7:96:a2"
       ignition_config_data: "{{lookup('file', '{{ playbook_dir }}/{{ cluster_name }}/worker.64') }}"
 
-  - name: Create OCS1 VMs
+  - name: Create OCS3 VM
     include_role:
      name: vmware
     vars:

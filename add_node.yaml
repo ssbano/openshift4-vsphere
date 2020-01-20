@@ -13,7 +13,7 @@
       private: yes
  
     - name: node_number
-      prompt: "Provide node number (2 to 9)"
+      prompt: "Provide node number (2 to 6)"
       private: no
 
     - name: pull_secret
