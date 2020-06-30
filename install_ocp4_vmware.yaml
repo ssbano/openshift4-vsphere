@@ -144,15 +144,15 @@
   - name: Create ignition files
     shell: "openshift-install create ignition-configs --dir={{playbook_dir}}/{{ cluster_name }}"
 
-  - name: Create bookstrap network config file
-    template:
-     src: "{{ playbook_dir }}/templates/netconfig.j2"
-     dest: "{{ playbook_dir }}/{{ cluster_name }}/bootstrap.net"
-    vars:
-     net_ip_address: 192.168.10.9
-     net_mask_prefix: 24
-     net_gateway: 192.168.10.1
-     net_dns: "192.168.10.1"
+#  - name: Create bookstrap network config file
+#    template:
+#     src: "{{ playbook_dir }}/templates/netconfig.j2"
+#     dest: "{{ playbook_dir }}/{{ cluster_name }}/bootstrap.net"
+#    vars:
+#     net_ip_address: 192.168.10.9
+#     net_mask_prefix: 24
+#     net_gateway: 192.168.10.1
+#     net_dns: "192.168.10.1"
 
   - name: Create base64 network config file
     shell: "base64 -w0 {{ playbook_dir}}/{{ cluster_name }}/bootstrap.net > {{ cluster_name}}/bootstrap.net.64"
