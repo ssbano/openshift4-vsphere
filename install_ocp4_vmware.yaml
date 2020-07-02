@@ -47,11 +47,11 @@
      state: started
      enabled: yes
 
-  - name: Download pip
-    get_url:
-     url: https://bootstrap.pypa.io/get-pip.py
-     dest: /tmp/get-pip.py
-     mode: '0755'
+  # - name: Download pip
+  #   get_url:
+  #   url: https://bootstrap.pypa.io/get-pip.py
+  #   dest: /tmp/get-pip.py
+  #   mode: '0755'
 
   # - name: Download pip
   #   shell: curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
